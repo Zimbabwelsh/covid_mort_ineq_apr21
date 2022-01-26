@@ -8,7 +8,7 @@ library(viridis)
 library(lubridate)
 }))
 
-setwd("C:/Users/gg9824/Dropbox/00ESRC Fellowship/Projects/COVID19/COVID Inequalities/Final Models/aprilRuns/500k RUN//XC reruns")
+setwd("path/to/data")
 
 rcoefnames <- c("Mar20", "Apr20", "May20", "Jun20", "July20", "Aug20", "Sep20", "Oct20", "Nov20", "Dec20", "Jan21", "Feb21", "Mar21", "Apr21")
 levnames <- c("MSOA","TTWA", "Region")
