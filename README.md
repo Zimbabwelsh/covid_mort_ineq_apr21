@@ -2,4 +2,8 @@
 
 This repo contains code to construct datasets and results figures for a submitted manuscript. 
 
+Dataset construction (and open source datasets used to construct the data) can be found in 00_data_reshaping.R
+
+Post-modelling results processing can be found in fig_generation.R 
+
 This manuscript will be available as a preprint shortly.
