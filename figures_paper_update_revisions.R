@@ -10,52 +10,61 @@ library(lubridate)
 
 setwd("path/to/data")
 
-
-### Set names for random coefficients, here months post March 2020
+# Set names for random coefficients, here months post March 2020
 rcoefnames <- c("Mar20", "Apr20", "May20", "Jun20", "July20", "Aug20", "Sep20", "Oct20", "Nov20", "Dec20", "Jan21", "Feb21", "Mar21", "Apr21")
-
-### Set names for structural levels in the model 
+# Set names for structural levels in the model
 levnames <- c("MSOA","TTWA", "Region")
 
-### Read in COVID-19 data using bespoke data_process function (defined below)
-COV_noIMD <- data_process("cov_noIMD_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 18, 14, rcoefnames, "COVID-19")
-## Create MRR list for figure
+## Read in using baseline model output from MLwiN (extracted to csv from c1090) - uses bespoke "data_process" 
+## function, written out at the end
+# Produces MRRs, Correlations, and estimates of Total Variance
+COV_noIMD <- data_process("cov_noimd_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 32, 14, rcoefnames, "COVID-19")
 covMRRs <- COV_noIMD[[1]]
 covcorrs <- COV_noIMD[[2]]
-## Create MRRs for figures
 totalvars <- COV_noIMD[[3]]
 
-### Read in non-COVID-19 data using data_process and output variances and correlations
-NCOV_noIMD <- data_process("ncov_noIMD_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 18, 14, rcoefnames, "Non COVID-19")
+NCOV_noIMD <- data_process("ncov_noimd_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 32, 14, rcoefnames, "Non COVID-19")
 ncovMRRS <- NCOV_noIMD[[1]]
 ncovcorrs <- NCOV_noIMD[[2]]
 
-## Combine data frames for MRR processing
+#Create MRR dataset for both COVID and non-COVID mortality
 MRR_noIMD <- bind_rows(list(covMRRs, ncovMRRS))
 
-## Convert months to lubridate::ymd date format
+# Convert month indicators from model into dates (mid-month)
 date <- dmy("11/12/2019")
 MRR_noIMD$date <- ymd(date %m+% months(as.numeric(MRR_noIMD$Month)))
+#Create outcome indicator
 MRR_noIMD$outcome <- factor(MRR_noIMD$outcome, levels=c("COVID-19", "Non COVID-19"))
 
-## Combine data frames for correlation processing
+#Create correlations data-frame
 corr_noIMD <- bind_rows(list(covcorrs, ncovcorrs))
 
 
-### Read in COVID-19 and non-COVID data, having adjusted for IMD and population density
-COV_IMD <- data_process("cov_UKIMD_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 74, 14, rcoefnames, "COVID-19")
+#Repeat for models adjusted for IMD and population density
+COV_IMD <- data_process("cov_ukimd_popden_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 74, 14, rcoefnames, "COVID-19")
 covMRRs <- COV_IMD[[1]]
 covcorrs <- COV_IMD[[2]]
 
-NCOV_IMD <- data_process("ncov_UKIMD_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 74, 14, rcoefnames, "Non COVID-19")
+NCOV_IMD <- data_process("ncov_ukimd_popden_500k.csv", 500000, 3, c("MSOA", "TTWA", "Region"), 74, 14, rcoefnames, "Non COVID-19")
 ncovMRRs <- NCOV_IMD[[1]]
 ncovcorrs <- NCOV_IMD[[2]]
 
+# Create MRR dataset for COVID and nonCOVID mortality, adjusted for IMD and pop-density
 MRR_UKIMD <- bind_rows(list(covMRRs, ncovMRRs))
 MRR_UKIMD$date <- ymd(date %m+% months(as.numeric(MRR_UKIMD$Month)))
 corr_UKIMD <- bind_rows(list(covcorrs, ncovcorrs))
-
+#Create outcome indicator
 MRR_UKIMD$outcome <- factor(MRR_UKIMD$outcome, levels=c("COVID-19", "Non COVID-19"))
+
+
+#Read study dates
+
+dates <- read.csv("../../studyDates.csv")
+dates$StartDate <- dates$StartDate %>% dmy()
+dates$EndDate <- dates$EndDate %>% dmy()
+colnames <- c("Period", "Start", "End")
+colnames(dates) <- colnames
+dates$Period <- factor(dates$Period, levels=c(1,2,3,4))
 
 #########
 # PLOTS #
@@ -65,12 +74,12 @@ MRR_UKIMD$outcome <- factor(MRR_UKIMD$outcome, levels=c("COVID-19", "Non COVID-1
 # Deaths timeline plot #
 ########################
 
-### Read in ONS derived daily death estimates
-daily <- read.csv("../../nation_daily_deaths_toOct21.csv")
-### Restrict to study period
+#Read in daily deaths - accessible at https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/conditionsanddiseases/articles/coronaviruscovid19latestinsights/deaths
+daily <- read.csv("../../../nation_daily_deaths_toOct21.csv")
+#Create lubridate interval for study period
 mort_period <- interval(ymd("2020-03-01"), ymd("2021-04-30")) 
+# Select relevant columns, dates within interval, and only deaths in England and Wales
 daily$date <- daily$date %>% dmy()
-### Restrict solely to England and Wales and create new data frame to solely include deaths in England and Wales, and date.
 daily <- daily %>% select(areaName, date, newDeaths28DaysByDeathDate) %>% filter(areaName=="England"|areaName=="Wales")
 daily <- daily %>% filter(ymd(date) %within% mort_period)
 daily <- daily %>% pivot_wider(names_from = areaName, values_from = newDeaths28DaysByDeathDate)
@@ -78,8 +87,8 @@ daily$Wales <- replace_na(daily$Wales, 0)
 daily <- daily %>% mutate(total=England+Wales) %>% select(date, total)
 
 
-### Read study dates for plotting period of tiered lockdowns (Figure 1)
-dates <- read.csv("../studyDates.csv")
+# Add study dates for annotation
+dates <- read.csv("../../studyDates.csv")
 dates$StartDate <- dates$StartDate %>% dmy()
 dates$EndDate <- dates$EndDate %>% dmy()
 colnames <- c("Period", "Start", "End")
@@ -87,7 +96,11 @@ colnames(dates) <- colnames
 dates$Period <- factor(dates$Period, levels=c(1,2,3,4))
 
 
-### Create basic plot of deaths. 
+
+#####################
+# Generate Figure 1 #
+#####################
+
 deathplot <- ggplot(daily,
        aes(x=date, y=total))+
   geom_ribbon(aes(ymin=0, ymax=total),  fill="dark grey")+
@@ -95,12 +108,11 @@ deathplot <- ggplot(daily,
   xlab("Date")+
   theme(legend.position = "none")
   
-## Include annotation for Tiered/National flags based on lockdown dates
+# Annotation text
 ann.text <- data.frame(Start = ymd(c("2020-10-20", "2020-11-03")), 
                        y=c(-112.5, -40),
                        lab= c("Tiered Lockdowns", "National")) 
-
-## Create boxes to overlay based on lockdown date. 
+# Annotation boxes
 annot_death_plot <- deathplot+
   annotate("rect", xmin=dates$Start[3], xmax=dates$End[3], ymin=-150, ymax=0, alpha=0.6, fill="#7570b3")+
   annotate("rect", xmin=ymd("2020-11-05"), xmax=ymd("2020-12-02"), ymin=-75, ymax=0, alpha=0.5, fill="#1d449f")+
@@ -116,14 +128,16 @@ annot_death_plot <- deathplot+
   geom_vline(xintercept = c(dates$End[2:3]), linetype=2, alpha=0.6)
 annot_death_plot
 
-### Save out Figure 1
 ggsave("dateDeathPlot.png", dpi=350)
+
+
+
 
 ##########################
 ### Combined MRR plots ###
 ##########################
 
-### Produce ggplot object for MRRs without IMD
+# Produce ggplot graphic
 NOIMD_MRRplot <- ggplot(MRR_noIMD, aes(x=date, y=Median, colour=level))+
   geom_line(size=0.8)+
   scale_colour_manual(values=c("#1b9e77","#d95f02", "#7570b3"))+
@@ -143,8 +157,6 @@ NOIMD_MRRplot
 
 ggsave("NOIMD_MRRplot.png", dpi=350)
 
-
-### Produce ggplot object for MRRS with IMD and popden included.
 UKIMD_MRRplot <- ggplot(MRR_UKIMD, aes(x=date, y=Median, colour=level))+
   geom_line(size=0.8)+
   scale_colour_manual(values=c("#1b9e77","#d95f02", "#7570b3"))+
@@ -164,13 +176,9 @@ UKIMD_MRRplot
 
 ggsave("UKIMD_MRRplot.png", dpi=350)
 
-
-
 ######################
 # Combined VPC plots #
 ######################
-
-## Produce VPC plots for results without IMD
 NOIMD_VPCplot <- ggplot(data=MRR_noIMD, aes(x=date, y=VPC, colour=level)) +
   geom_line(size=1)+
   ylim(0,1) +
@@ -187,8 +195,6 @@ NOIMD_VPCplot
 
 ggsave("NOIMD_VPCplot.png", dpi=350)
 
-
-## Produce VPC plot for results adjusting for IMD and popden
 UKIMD_VPCplot <- ggplot(data=MRR_UKIMD, aes(x=date, y=VPC, colour=level)) +
   geom_line(size=1)+
   ylim(0,1) +
@@ -205,12 +211,87 @@ UKIMD_VPCplot
 
 ggsave("UKIMD_VPCplot.png", dpi=350)
 
+###########################
+### Combined Corr plots ###
+###########################
+
+### combine covid and other deaths together
+correstsMod2 <-  bind_rows(list(covcorrs, ncovcorrs))
+
+### make the plot
+ggplot(data = corr_noIMD,
+       aes(month1,
+           fct_rev(month2), 
+           fill=Median, 
+           label=sprintf("%.2f", round(Median,2)))) +
+  geom_tile() +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Pearson's\nCorrelation", 
+       title="Multiscale monthly mortality correlations") + 
+  ### add colour scale
+  scale_fill_gradient2(mid="#FBFEF9",low="#A63446",high="#0C6291", limits=c(-1,1)) +
+  ### add in the numbers on the tiles
+  # geom_text() +
+  scale_x_discrete(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0)) +
+  theme_minimal() +
+  ### change text sizes
+  theme(axis.text=element_text(size=8, colour = "black"),
+        axis.text.x=element_text(angle=90),
+        strip.text = element_text(size=12),
+        legend.title=element_text(size=12),
+        plot.title = element_text(size = 16)) +
+  ### create 2 by 4 plot with each level as row starting with region (fct_rev)
+  facet_grid(fct_rev(level)~outcome) 
+
+ggplot(data = corr_UKIMD,
+       aes(month1,
+           fct_rev(month2), 
+           fill=Median, 
+           label=sprintf("%.2f", round(Median,2)))) +
+  geom_tile() +
+  labs(x = NULL,
+       y = NULL,
+       fill = "Pearson's\nCorrelation", 
+       title="Multiscale monthly mortality correlations") + 
+  ### add colour scale
+  scale_fill_gradient2(mid="#FBFEF9",low="#A63446",high="#0C6291", limits=c(-1,1)) +
+  ### add in the numbers on the tiles
+  # geom_text() +
+  scale_x_discrete(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0)) +
+  theme_minimal() +
+  ### change text sizes
+  theme(axis.text=element_text(size=8, colour = "black"),
+        axis.text.x=element_text(angle=90),
+        strip.text = element_text(size=12),
+        legend.title=element_text(size=12),
+        plot.title = element_text(size = 16)) +
+  ### create 2 by 4 plot with each level as row starting with region (fct_rev)
+  facet_grid(fct_rev(level)~outcome) 
+
+
+
+ggplot(corr_noIMD,
+       aes(month1, month2, fill=Median))+
+  geom_raster(hjust = 0, vjust = 0)+
+  facet_grid(fct_rev(level)~outcome) +
+  scale_color_viridis()+
+  theme(axis.text.x=element_text(size=10, angle=90))
+
+ggsave("Mod2ENGIMDMortCorrs.tiff")
+
+########################
+# UK COVID deaths data #
+########################
+
+
 #######################
 # Fixed effects plots #
 #######################
-
-### Data reading for fixed effects - reread IMD adjusted model
-MCMC <- fread("cov_UKIMD_500k.csv")
+### Data reading
+MCMC <- fread("cov_ukimd_popden_500k.csv")
 
 # Read in & Reshape data
 df <- as.data.frame(matrix(MCMC$V1, 500000, (nrow(MCMC)/500000), byrow=TRUE))
@@ -218,10 +299,13 @@ df <- as.data.frame(matrix(MCMC$V1, 500000, (nrow(MCMC)/500000), byrow=TRUE))
 df <- df[,-(ncol(df))]
 raw_fixed_ests <- df[,15:74]
 
+cov_density <- df[,75:88]
+
 # Quants for percentiles
 quants <- c(0.025,0.05,0.50,0.95,0.975)
 # Calculate percentiles of fixed effects and reshape, rename
 fixed_ests <- as.data.frame(apply(raw_fixed_ests, 2, quantile, probs = quants))
+cov_density <- as.data.frame(apply(density, 2, quantile, probs=quants))
 colnames <- c("25-44", "45-64", "65-74", "75+",
               paste("CH", rcoefnames, sep=""),
               paste("RegIMD", rcoefnames, sep=""),
@@ -231,8 +315,6 @@ colnames(fixed_ests) <- colnames
 
 fixed_ests <-  fixed_ests %>% select(contains("IMD"))
 
-### Keep fixed effect estimates for IMD adjusted COVID deaths.
-
 fixed_ests <- fixed_ests %>%
   tibble::rownames_to_column() %>%  
   pivot_longer(-rowname) %>% 
@@ -241,20 +323,21 @@ fixed_ests$month <- rep(3:16, 3)
 fixed_ests$level <- c(rep("Reg", 14), rep("MSOA", 14), rep("TTWA", 14))
 fixed_ests$level <- factor(fixed_ests$level, levels=c("Reg", "TTWA", "MSOA"))
 
-### Repeat for non-COVID mortality.
 
-MCMC <- fread("ncov_UKIMD_500k.csv")
+MCMC <- fread("ncov_ukimd_popden_500k.csv")
 
 # Read in & Reshape data
 df <- as.data.frame(matrix(MCMC$V1, 500000, (nrow(MCMC)/500000), byrow=TRUE))
 # Drop final col as it only contains level 1 (constant)
 df <- df[,-(ncol(df))]
 raw_fixed_ests <- df[,15:74]
+ncov_density <- df[,75:88]
 
 # Quants for percentiles
 quants <- c(0.025,0.05,0.50,0.95,0.975)
 # Calculate percentiles of fixed effects and reshape, rename
 ncov_fixed_ests <- as.data.frame(apply(raw_fixed_ests, 2, quantile, probs = quants))
+
 colnames <- c("25-44", "45-64", "65-74", "75+",
               paste("CH", rcoefnames, sep=""),
               paste("RegIMD", rcoefnames, sep=""),
@@ -276,15 +359,37 @@ ncov_fixed_ests$level <- factor(ncov_fixed_ests$level, levels=c("Reg", "TTWA", "
 # Combined data frame #
 #######################
 
-## Merge rows to make total IMD fixed effect list
+density_tot <- bind_cols(cov_density, ncov_density)
+colnames(density_tot) <- c(paste("dens_cov_", rcoefnames, sep=""),
+                           paste("dens_ncov_", rcoefnames, sep=""))
+
+density_tot <- as.data.frame(apply(density_tot, 2, quantile, probs=quants))
+
+density_tot <- density_tot %>% rownames_to_column() %>% 
+  pivot_longer(-rowname) %>% 
+  pivot_wider(names_from=rowname,  values_from=value)
+density_tot$month <- rep(3:16, 2)
+density_tot$date <- date %m+% months(as.numeric(density_tot$month))
+density_tot$outcome <- c(rep("COVID-19", 14), rep("Non COVID-19", 14))
+density_tot <- density_tot %>% mutate(densityOR = exp(density_tot$`50%`))
+
+ggplot(density_tot, 
+       aes(x=date, y=densityOR, 
+           group=outcome, 
+           colour=outcome))+
+  geom_line()+
+  ylim(0.90, 2.5)
+
+
+
 fixed_tot <- bind_rows(fixed_ests, ncov_fixed_ests, .id="id")
 fixed_tot$type <- fixed_tot$id %>% recode(`1`="COVID-19", `2`="Non COVID-19")
 
-## Convert dates to lubridate format
 date <- dmy("15/12/2019")
 fixed_tot$date <- date %m+% months(as.numeric(fixed_tot$month))
 
-### Update to convert units to SDs for each UKIMD metric (calculated by raw variance for each level)
+### Update to convert units to SDs for each UKIMD metric
+
 fixed_tot <- fixed_tot %>% mutate(
   SD = case_when(
     level == "Reg" ~ 4.446,
@@ -293,14 +398,13 @@ fixed_tot <- fixed_tot %>% mutate(
 
 fixed_tot <- fixed_tot %>% mutate(SDOR = exp(fixed_tot$`50%`*fixed_tot$SD),
                                   SD2.5=exp(fixed_tot$`2.5%`*fixed_tot$SD),
-                                  SD97.5=exp(fixed_tot$`97.5%`*fixed_tot$SD))
+                                  SD97.5=exp(fixed_tot$`97.5%`*fixed_tot$SD),
+                                  OR = exp(fixed_tot$`50%`))
 
 
 ##################
 # Total Variance #
 ##################
-
-### Recover raw variance estimates from processed MRR data
 MRR_noIMD$variance <- (log(MRR_noIMD$Median)/0.6745)^2/2
 
 ## Create new dataframe & sum over months, collapse rows
@@ -309,23 +413,19 @@ covTotVar <- MRR_noIMD %>%
   select("outcome", "date","variance") %>%
   group_by(date) %>%
   summarise(sum(variance))
-## Calculate variance as fraction of max monthly variance
+
+# Convert variance to a proportion
 covTotVar$propmax <- covTotVar$`sum(variance)`/max(covTotVar$`sum(variance)`)
-## Create variable indicator
 covTotVar$Measure <- "Total Variance"
 
-## Calculate daily deaths as fraction of max daily deaths
+# Convert deaths to a proportion
 daily$propmax <- daily$total/max(daily$total)
-## Create variable indicator
 daily$Measure <- "Total Mortality"
+
 dailyprop <- daily %>% select(date, propmax, Measure)
 varprop <- covTotVar %>% select(date, propmax, Measure)
-
-## Combined data frames
 ineq_data <- bind_rows(dailyprop, varprop)
 
-
-## Generate ggplot object combining proportions on same scale. 
 inequality_fig <- ggplot(data=ineq_data, 
                          aes(x=date, y=propmax, group=Measure, colour=Measure))+
   geom_line(size=0.8)+
@@ -338,12 +438,35 @@ inequality_fig
 
 ggsave("ineq_plot.png", dpi=350)
 
-#########################
-# Fixed Effect IMD Plot #
-#########################
 
-### Take data from fixed-effect total dataframe and generate ggplot object
+######################
+# Fixed effect Plots #
+######################
+
 IMDplot <- ggplot(data=fixed_tot, 
+                  aes(x=date, y=OR,
+                      group=level,colour=level))+
+  geom_line(size=1.2)+
+  geom_hline(yintercept = 1, colour="black", linetype=2)+
+  #ylim(0.9, 1.25)+
+  xlab("Date")+
+  ylab("UKIMD Relative Risk Ratio")+
+  # + geom_ribbon(aes(ymin=exp(`2.5%`), ymax=exp(`97.5%`)),
+  # linetype=3, alpha=0.2)+
+  facet_grid(vars(type))+
+  theme(axis.text.x=element_text(color = "black",
+                                 size=7.5, angle=30, hjust=0.8))+
+  scale_x_date(date_labels = "%b %y")+
+  theme(strip.background = element_blank())+
+  scale_colour_manual(values=c("#7570b3","#d95f02", "#1b9e77"))+
+  annotate("rect", xmin=dates$Start[3], xmax=dates$End[3], ymin=0.9, ymax=1.25, alpha=0.15, fill="#7570b3")
+
+IMDplot
+
+ggsave('imdplot.png', dpi=300)
+
+
+unstdIMDplot <- ggplot(data=fixed_tot, 
                   aes(x=date, y=SDOR,
                       group=level,colour=level))+
   geom_line(size=1.2)+
@@ -351,6 +474,8 @@ IMDplot <- ggplot(data=fixed_tot,
   #ylim(0.9, 1.25)+
   xlab("Date")+
   ylab("UKIMD Relative Risk Ratio")+
+  # + geom_ribbon(aes(ymin=exp(`2.5%`), ymax=exp(`97.5%`)),
+  # linetype=3, alpha=0.2)+
   facet_grid(vars(type))+
   theme(axis.text.x=element_text(color = "black",
                                  size=7.5, angle=30, hjust=0.8))+
@@ -359,7 +484,7 @@ IMDplot <- ggplot(data=fixed_tot,
   scale_colour_manual(values=c("#7570b3","#d95f02", "#1b9e77"))+
   annotate("rect", xmin=dates$Start[3], xmax=dates$End[3], ymin=0.8, ymax=2.5, alpha=0.15, fill="#7570b3")
 
-IMDplot
+unstdIMDplot
 
 ggsave("IMD_combined_mort.png", dpi=350)
 
@@ -368,8 +493,6 @@ ggsave("IMD_combined_mort.png", dpi=350)
 ############################
 # Data Processing Function #
 ############################
-
-## Create bespoke data processing function for long-string coeffficient estimates from MLwiN output (c1090)
 
 data_process <- function(data, iter, levels, levnames, fcoefs, rcoefs, rcoefnames, type){
   
