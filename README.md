@@ -6,4 +6,6 @@ Dataset construction (and open source datasets used to construct the data) can b
 
 Post-modelling results processing can be found in figures_paper_update.R 
 
-This manuscript will be available as a preprint shortly.
+This manuscript is now published in Health and Place.
+
+<a href="https://www.sciencedirect.com/science/article/pii/S1353829222001095">Griffith et al. 2022. <em> "Continuing inequalities in COVID-19 mortality in England and Wales, and the changing importance of regional, over local, deprivation"</a>
